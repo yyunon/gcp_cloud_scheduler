@@ -1,0 +1,5 @@
+Flask==2.2.2
+PyMySQL==1.1.1
+SQLAlchemy==2.0.24
+cloud-sql-python-connector==1.2.4
+google-cloud-logging
