@@ -1,109 +1,76 @@
 'use strict';
 const functions = require('@google-cloud/functions-framework');
-const compute = require('@google-cloud/compute');
+const Compute = require('@google-cloud/compute');
 
-// Change this const value to your project
-const projectId = 'swift-clarity-428809-s5';
-const zone = 'us-central1-c';
+async function createInstance() {
+  // Change this const value to your project
+  const projectId = 'swift-clarity-428809-s5';
+  const zone = 'us-central1-c';
+  const vmName = 'mycloudscheduler-vm' + Date.now();
 
-const vmConfig = {
-  kind: 'compute#instance',
-  zone: `projects/${projectId}/zones/${zone}`,
-  machineType: `projects/${projectId}/zones/${zone}/machineTypes/f1-micro`,
-  displayDevice: {
-    enableDisplay: false
-  },
-  metadata: {
-    kind: 'compute#metadata',
-    items: [
+  console.log(`Creating instance ${vmName} in zone ${zone}`);
+  const compute = new Compute.InstancesClient();
+
+  const vmConfig = {
+    name: vmName, 
+    machineType: `zones/${zone}/machineTypes/f1-micro`,
+    metadata: {
+      items: [
+        {
+          key: 'google-logging-enabled',
+          value: 'true',
+        },
+        {
+          key: "gce-container-declaration",
+          value: "spec:\n  containers:\n  - name: instance-20240709-145149\n    image: us-central1-docker.pkg.dev/swift-clarity-428809-s5/mycloudscheduler/functest\n    stdin: false\n    tty: false\n  restartPolicy: Always\n# This container declaration format is not public API and may change without notice. Please\n# use gcloud command-line tool or Google Cloud Console to run Containers on Google Compute Engine."
+        }
+      ]
+    },
+    disks: [
       {
-        key: 'google-logging-enabled',
-        value: 'true',
+        type: 'PERSISTENT',
+        boot: true,
+        autoDelete: true,
+        initializeParams: {
+          sourceImage: `projects/debian-cloud/global/images/debian-12-bookworm-v20240709`,
+          diskSizeGb: '10'
+        },
+      }
+    ],
+    networkInterfaces: [
+      {
+        // Use the network interface provided in the networkName argument.
+        name: 'global/networks/default',
       },
-			{
-				key: "gce-container-declaration",
-        value: "spec:\n  containers:\n  - name: instance-20240709-145149\n    image: us-central1-docker.pkg.dev/swift-clarity-428809-s5/mycloudscheduler/functest\n    stdin: false\n    tty: false\n  restartPolicy: Always\n# This container declaration format is not public API and may change without notice. Please\n# use gcloud command-line tool or Google Cloud Console to run Containers on Google Compute Engine."
+    ],
+    deletionProtection: false,
+    serviceAccounts: [
+      {
+        email: `provisioning@${projectId}.iam.gserviceaccount.com`,
+        scopes: [
+          'https://www.googleapis.com/auth/cloud-platform'
+        ]
       }
     ]
-  },
-  tags: {
-    items: []
-  },
-  disks: [
-    {
-      kind: 'compute#attachedDisk',
-      type: 'PERSISTENT',
-      boot: true,
-      mode: 'READ_WRITE',
-      autoDelete: true,
-      deviceName: 'instance-1',
-      initializeParams: {
-        sourceImage: `projects/debian-cloud/global/images/debian-9-stretch-v20190729`,
-        diskType: `projects/${projectId}/zones/${zone}/diskTypes/pd-standard`,
-        diskSizeGb: '10'
-      },
-      diskEncryptionKey: {}
-    }
-  ],
-  canIpForward: false,
-  networkInterfaces: [
-    {
-      kind: 'compute#networkInterface',
-      subnetwork: `projects/${projectId}/regions/us-central1/subnetworks/default`,
-      accessConfigs: [
-        {
-          kind: 'compute#accessConfig',
-          name: 'External NAT',
-          type: 'ONE_TO_ONE_NAT',
-          networkTier: 'PREMIUM'
-        }
-      ],
-      aliasIpRanges: []
-    }
-  ],
-  description: '',
-  labels: {},
-  scheduling: {
-    preemptible: false,
-    onHostMaintenance: 'MIGRATE',
-    automaticRestart: true,
-    nodeAffinities: []
-  },
-  deletionProtection: false,
-  reservationAffinity: {
-    consumeReservationType: 'ANY_RESERVATION'
-  },
-  serviceAccounts: [
-    {
-      email: `provisioning@${projectId}.iam.gserviceaccount.com`,
-      scopes: [
-        'https://www.googleapis.com/auth/cloud-platform'
-      ]
-    }
-  ]
+  }
+
+
+  compute.insert({
+    instanceResource: vmConfig,
+    zone: zone,
+    project: projectId,
+  }).then(response => {
+    let operation  = response[0].latestResponse;
+    const operationsClient = new Compute.ZoneOperationsClient();
+
+    operationsClient.wait({
+      operation: operation.name,
+      project: projectId,
+      zone: operation.zone.split('/').pop(),
+    }).then(() => {
+      console.log("VM created with success.")
+    });
+  });
 }
 
-exports.createScheduledInstance = (event, context) => {
-  const vmName = 'mycloudscheduler-vm' + Date.now();
-  try {
-    compute.zone(zone)
-      .createVM(vmName, vmConfig)
-      .then(data => {
-        // Operation pending.
-        const vm = data[0];
-        const operation = data[1];
-        console.log(`VM being created: ${vm.id}`);
-        console.log(`Operation info: ${operation.id}`);
-        return operation.promise();
-      })
-      .then(() => {
-        const message = 'VM created with success, Cloud Function finished execution.';
-        console.log(message);
-      })
-      .catch(err => {
-        console.log(err);
-      });
-  } catch (err) {
-    console.log(err);
-  }
-};
+createInstance();
