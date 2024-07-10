@@ -1,5 +1,6 @@
-const Compute = require('@google-cloud/compute');
-const compute = new Compute();
+'use strict';
+const functions = require('@google-cloud/functions-framework');
+const compute = require('@google-cloud/compute');
 
 // Change this const value to your project
 const projectId = 'swift-clarity-428809-s5';
@@ -82,7 +83,7 @@ const vmConfig = {
   ]
 }
 
-exports.createInstance = (event, context) => {
+exports.createScheduledInstance = (event, context) => {
   const vmName = 'mycloudscheduler-vm' + Date.now();
   try {
     compute.zone(zone)
