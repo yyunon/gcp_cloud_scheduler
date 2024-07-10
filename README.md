@@ -1,7 +1,7 @@
 # Cloud Scheduler Template
 This repository holds a template for cloud scheduling with automated provisioning via terraform. 
 
-![System Design](./docs/system_design.png "System Design")
+![System Design](https://github.com/yyunon/gcp_cloud_scheduler/blob/master/docs/systemdesign.png "System Design")
 
 # Prerequisites
 * A machine with working gcloud cli
